@@ -5,10 +5,11 @@ import org.gradle.internal.jvm.Jvm
 buildscript {
     // The version for the Kotlin plugin and dependencies
     ext.kotlin_version = '1.6.21'
-    ext.lint_version = '30.1.3'
+    ext.lint_version = '30.2.0'
     ext.acra_version = '5.7.0'
     ext.ankidroid_backend_version = '0.1.10'
     ext.hamcrest_version = '2.2'
+    ext.junit_version = '5.8.2'
 
     repositories {
         google()
@@ -17,13 +18,13 @@ buildscript {
         }
     }
     dependencies {
-        classpath 'com.android.tools.build:gradle:7.1.3'
+        classpath 'com.android.tools.build:gradle:7.2.0'
         // NOTE: Do not place your application dependencies here; they belong
         // in the individual module build.gradle files
         classpath "app.brant:amazonappstorepublisher:0.1.0"
 
         classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
-        classpath "org.jlleitschuh.gradle:ktlint-gradle:10.2.1"
+        classpath "org.jlleitschuh.gradle:ktlint-gradle:10.3.0"
     }
 }
 
@@ -44,6 +45,7 @@ subprojects {
                 includeAndroidResources = true
             }
             project.android.testOptions.unitTests.all {
+                useJUnitPlatform()
                 testLogging {
                     events "failed", "skipped"
                     showStackTraces = true
@@ -52,8 +54,6 @@ subprojects {
 
                 maxParallelForks = gradleTestMaxParallelForks
                 forkEvery = 40
-                maxHeapSize = "2048m"
-                minHeapSize = "1024m"
                 systemProperties['junit.jupiter.execution.parallel.enabled'] = true
                 systemProperties['junit.jupiter.execution.parallel.mode.default'] = "concurrent"
             }
@@ -116,11 +116,17 @@ ext {
     // allows for universal APKs to be generated
     universalApkEnabled = "true" == System.getProperty("universal-apk", "false")
 
-    // Virtualized Environment like CI may report host CPU counts vs guest, but runs 2 cores
-    // everyone else gets 50% of cores to account for SMT which doesn't help this workload
-    gradleTestMaxParallelForks = 1
-    if (!ciBuild) {
+    if (System.getProperty("os.name") == "Mac OS X") {
+        // macOS reports hardware cores. This is accurate for CI, Intel (halved due to SMT) and Apple Silicon
+        gradleTestMaxParallelForks = "sysctl -n hw.physicalcpu".execute().text.toInteger()
+    } else if (ciBuild) {
+        // GitHub Actions (Standard_DS2_v2) are 1:1 on Linux/Windows with two vCPU cores
+        // Sources:
+        // Standard_DS2_v2 https://docs.github.com/en/actions/using-github-hosted-runners/about-github-hosted-runners#cloud-hosts-for-github-hosted-runners
+        // Which is 1:1 https://docs.microsoft.com/en-gb/azure/virtual-machines/acu : DS1_v2 - DS15_v2 | 1:1
+        gradleTestMaxParallelForks = 2
+    } else {
+        // Use 50% of cores to account for SMT which doesn't help this workload
         gradleTestMaxParallelForks = Runtime.runtime.availableProcessors().intdiv(2) ?: 1
     }
 }
-

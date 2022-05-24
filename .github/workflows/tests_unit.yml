@@ -35,7 +35,7 @@ concurrency:
 jobs:
   unit:
     name: JUnit Tests
-    timeout-minutes: 30
+    timeout-minutes: 40
     strategy:
       fail-fast: false
       matrix:
@@ -44,6 +44,14 @@ jobs:
     #env:
     #  CODACY_TOKEN: ${{ secrets.CODACY_TOKEN }}
     steps:
+      - name: Configure Windows Pagefile
+        uses: al-cheb/configure-pagefile-action@v1.2
+        if: matrix.os == 'windows-latest'
+        with:
+          minimum-size: 8GB
+          maximum-size: 12GB
+          disk-root: "D:"
+
       - uses: actions/checkout@v3
         with:
           fetch-depth: 50
@@ -62,6 +70,7 @@ jobs:
 
       - name: Setup Gradle
         uses: gradle/gradle-build-action@v2
+        timeout-minutes: 5
         with:
           # Only write to the cache for builds on the 'main' branches, stops branches evicting main cache
           # Builds on other branches will only read from main branch cache writes
@@ -80,6 +89,12 @@ jobs:
         uses: gradle/gradle-build-action@v2
         with:
           arguments: jacocoUnitTestReport --daemon
+
+      - name: Stop Gradle
+        if: matrix.os == 'windows-latest'
+        uses: gradle/gradle-build-action@v2
+        with:
+          arguments: --stop
 
       - name: Submit Coverage
         # This can fail on timeouts etc, wrap with retry

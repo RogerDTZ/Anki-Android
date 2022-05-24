@@ -53,7 +53,6 @@ import com.ichi2.anki.analytics.UsageAnalytics
 import com.ichi2.anki.cardviewer.GestureProcessor
 import com.ichi2.anki.contextmenu.AnkiCardContextMenu
 import com.ichi2.anki.contextmenu.CardBrowserContextMenu
-import com.ichi2.anki.debug.DatabaseLock.engage
 import com.ichi2.anki.exception.ConfirmModSchemaException
 import com.ichi2.anki.exception.StorageAccessException
 import com.ichi2.anki.reviewer.AutomaticAnswerAction
@@ -64,6 +63,7 @@ import com.ichi2.anki.web.CustomSyncServer
 import com.ichi2.anki.web.CustomSyncServer.getSyncBaseUrlOrDefault
 import com.ichi2.anki.web.CustomSyncServer.handleSyncServerPreferenceChange
 import com.ichi2.anki.web.CustomSyncServer.isEnabled
+import com.ichi2.annotations.NeedsTest
 import com.ichi2.compat.CompatHelper
 import com.ichi2.libanki.Collection
 import com.ichi2.libanki.Consts
@@ -139,7 +139,14 @@ class Preferences : AnkiActivity() {
         if (actionBar == null)
             return
 
+        @NeedsTest("check all settings fragments have defined titles")
         actionBar.title = when (fragment) {
+            is GeneralSettingsFragment -> resources.getString(R.string.pref_cat_general)
+            is ReviewingSettingsFragment -> resources.getString(R.string.pref_cat_reviewing)
+            is GesturesSettingsFragment -> resources.getString(R.string.pref_cat_gestures)
+            is ControlsSettingsFragment -> resources.getString(R.string.pref_cat_controls)
+            is AdvancedSettingsFragment -> resources.getString(R.string.pref_cat_advanced)
+            is AppearanceSettingsFragment -> resources.getString(R.string.pref_cat_appearance)
             is AdvancedStatisticsSettingsFragment -> resources.getString(R.string.advanced_statistics_title)
             is CustomSyncServerSettingsFragment -> resources.getString(R.string.custom_sync_server_title)
             is CustomButtonsSettingsFragment -> resources.getString(R.string.custom_buttons)
@@ -399,7 +406,7 @@ class Preferences : AnkiActivity() {
     private fun closePreferences() {
         finish()
         slide(this, ActivityTransitionAnimation.Direction.FADE)
-        if (col != null && col.db != null) {
+        if (col != null && !col.dbClosed) {
             col.save()
         }
     }
@@ -1094,7 +1101,9 @@ class Preferences : AnkiActivity() {
                 lockDbPreference.title = "Lock Database"
                 lockDbPreference.summary = "Touch here to lock the database (all threads block in-process, exception if using second process)"
                 lockDbPreference.onPreferenceClickListener = Preference.OnPreferenceClickListener {
-                    engage(requireContext())
+                    val c = CollectionHelper.getInstance().getCol(requireContext())!!
+                    Timber.w("Toggling database lock")
+                    c.db.database.beginTransaction()
                     true
                 }
                 screen.addPreference(lockDbPreference)
